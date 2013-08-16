@@ -73,33 +73,33 @@ extern "C" {
 #define unix_time() ((uint64_t)time(NULL))
 
 
-typedef union {
+union IP {
     uint8_t c[4];
     uint16_t s[2];
     uint32_t i;
-} IP;
+};
 
-typedef struct {
-    IP ip;
+struct IP_Port {
+    struct IP ip;
     uint16_t port;
     /* not used for anything right now */
     uint16_t padding;
-} IP_Port;
+};
 
-typedef struct {
+struct ADDR {
     int16_t family;
     uint16_t port;
-    IP ip;
+    struct IP ip;
     uint8_t zeroes[8];
 #ifdef ENABLE_IPV6
     uint8_t zeroes2[12];
 #endif
-} ADDR;
+};
 
 /* Function to receive data, ip and port of sender is put into ip_port
     the packet data into data
     the packet length into length. */
-typedef int (*packet_handler_callback)(IP_Port ip_port, uint8_t *data, uint32_t len);
+typedef int (*packet_handler_callback)(struct IP_Port ip_port, uint8_t *data, uint32_t len);
 
 /* returns current time in milleseconds since the epoch. */
 uint64_t current_time(void);
@@ -111,7 +111,7 @@ uint32_t random_int(void);
 /* Basic network functions: */
 
 /* Function to send packet(data) of length length to ip_port */
-int sendpacket(IP_Port ip_port, uint8_t *data, uint32_t length);
+int sendpacket(struct IP_Port ip_port, uint8_t *data, uint32_t length);
 
 /* Function to call when packet beginning with byte is received */
 void networking_registerhandler(uint8_t byte, packet_handler_callback cb);
@@ -125,7 +125,7 @@ void networking_poll();
     port is in host byte order (this means don't worry about it)
     returns 0 if no problems
     returns -1 if there were problems */
-int init_networking(IP ip, uint16_t port);
+int init_networking(struct IP ip, uint16_t port);
 
 /* function to cleanup networking stuff(doesn't do much right now) */
 void shutdown_networking(void);

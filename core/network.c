@@ -32,14 +32,14 @@ uint64_t current_time(void)
     FILETIME ft;
     GetSystemTimeAsFileTime(&ft);
     time = ft.dwHighDateTime;
-    time <<=32;
+    time <<= 32;
     time |= ft.dwLowDateTime;
     time -= 116444736000000000UL;
-    return time/10;
+    return time / 10;
 #else
     struct timeval a;
     gettimeofday(&a, NULL);
-    time = 1000000UL*a.tv_sec + a.tv_usec;
+    time = 1000000UL * a.tv_sec + a.tv_usec;
     return time;
 #endif
 }
@@ -61,26 +61,27 @@ static int sock;
 
 /* Basic network functions:
    Function to send packet(data) of length length to ip_port */
-int sendpacket(IP_Port ip_port, uint8_t * data, uint32_t length)
+int sendpacket(struct IP_Port ip_port, uint8_t *data, uint32_t length)
 {
-    ADDR addr = {AF_INET, ip_port.port, ip_port.ip};
-    return sendto(sock,(char *) data, length, 0, (struct sockaddr *)&addr, sizeof(addr));
+    struct ADDR addr = {AF_INET, ip_port.port, ip_port.ip};
+    return sendto(sock, (char *) data, length, 0, (struct sockaddr *)&addr, sizeof(addr));
 }
 
 /* Function to receive data, ip and port of sender is put into ip_port
    the packet data into data
    the packet length into length.
    dump all empty packets. */
-static int receivepacket(IP_Port * ip_port, uint8_t * data, uint32_t * length)
+static int receivepacket(struct IP_Port *ip_port, uint8_t *data, uint32_t *length)
 {
-    ADDR addr;
+    struct ADDR addr;
 #ifdef WIN32
     int addrlen = sizeof(addr);
 #else
     uint32_t addrlen = sizeof(addr);
 #endif
-    (*(int32_t*)length) = recvfrom(sock,(char*) data, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*)&addr, &addrlen);
-    if (*(int32_t*)length <= 0)
+    (*(int32_t *)length) = recvfrom(sock, (char *) data, MAX_UDP_PACKET_SIZE, 0, (struct sockaddr *)&addr, &addrlen);
+
+    if (*(int32_t *)length <= 0)
         return -1; /* nothing received or empty packet */
 
     ip_port->ip = addr.ip;
@@ -97,14 +98,15 @@ void networking_registerhandler(uint8_t byte, packet_handler_callback cb)
 
 void networking_poll()
 {
-    IP_Port ip_port;
+    struct IP_Port ip_port;
     uint8_t data[MAX_UDP_PACKET_SIZE];
     uint32_t length;
-    
-    while (receivepacket(&ip_port, data, &length) != -1)
-    {
+
+    while (receivepacket(&ip_port, data, &length) != -1) {
         if (length < 1) continue;
+
         if (!packethandlers[data[0]]) continue;
+
         packethandlers[data[0]](ip_port, data, length);
     }
 }
@@ -115,12 +117,14 @@ void networking_poll()
    port is in host byte order (this means don't worry about it)
    returns 0 if no problems
    returns -1 if there are problems */
-int init_networking(IP ip, uint16_t port)
+int init_networking(union IP ip, uint16_t port)
 {
 #ifdef WIN32
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2,2), &wsaData) != NO_ERROR)
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != NO_ERROR)
         return -1;
+
 #else
     srandom((uint32_t)current_time());
 #endif
@@ -131,11 +135,15 @@ int init_networking(IP ip, uint16_t port)
 
     /* Check for socket error */
 #ifdef WIN32
+
     if (sock == INVALID_SOCKET) /* MSDN recommends this */
         return -1;
+
 #else
+
     if (sock < 0)
         return -1;
+
 #endif
 
     /* Functions to increase the size of the send and receive UDP buffers
@@ -153,7 +161,7 @@ int init_networking(IP ip, uint16_t port)
 
     /* Enable broadcast on socket */
     int broadcast = 1;
-    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char*)&broadcast, sizeof(broadcast));
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&broadcast, sizeof(broadcast));
 
     /* Set socket nonblocking */
 #ifdef WIN32
@@ -166,8 +174,8 @@ int init_networking(IP ip, uint16_t port)
 #endif
 
     /* Bind our socket to port PORT and address 0.0.0.0 */
-    ADDR addr = {AF_INET, htons(port), ip};
-    bind(sock, (struct sockaddr*)&addr, sizeof(addr));
+    struct ADDR addr = {AF_INET, htons(port), ip};
+    bind(sock, (struct sockaddr *)&addr, sizeof(addr));
 
     return 0;
 }
@@ -207,18 +215,18 @@ uint32_t resolve_addr(const char *address)
     rc = getaddrinfo(address, "echo", &hints, &server);
 
     // Lookup failed.
-    if(rc != 0) {
+    if (rc != 0) {
         return 0;
     }
 
     // IPv4 records only..
-    if(server->ai_family != AF_INET) {
+    if (server->ai_family != AF_INET) {
         freeaddrinfo(server);
         return 0;
     }
-    
 
-    addr = ((struct sockaddr_in*)server->ai_addr)->sin_addr.s_addr;
+
+    addr = ((struct sockaddr_in *)server->ai_addr)->sin_addr.s_addr;
 
     freeaddrinfo(server);
     return addr;

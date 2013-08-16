@@ -610,7 +610,7 @@ struct Messenger *initMessenger(void)
     new_keys();
     m_set_statusmessage(m, (uint8_t *)"Online", sizeof("Online"));
     initNetCrypto();
-    struct IP ip;
+    union IP ip;
     ip.i = 0;
 
     if (init_networking(ip, PORT) == -1)

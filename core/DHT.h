@@ -30,22 +30,86 @@
 extern "C" {
 #endif
 
-
 /* size of the client_id in bytes */
 #define CLIENT_ID_SIZE crypto_box_PUBLICKEYBYTES
 
-typedef struct {
+/* maximum number of clients stored per friend. */
+#define MAX_FRIEND_CLIENTS 8
+
+/* A list of the clients mathematically closest to ours. */
+#define LCLIENT_LIST 32
+
+/* The list of ip ports along with the ping_id of what we sent them and a timestamp */
+#define LPING_ARRAY 256
+
+#define LSEND_NODES_ARRAY LPING_ARRAY/2
+
+/* the number of seconds for a non responsive node to become bad. */
+#define BAD_NODE_TIMEOUT 70
+
+/* the max number of nodes to send with send nodes. */
+#define MAX_SENT_NODES 8
+
+/* ping timeout in seconds */
+#define PING_TIMEOUT 5
+
+/* The timeout after which a node is discarded completely. */
+#define Kill_NODE_TIMEOUT 300
+
+/* ping interval in seconds for each node in our lists. */
+#define PING_INTERVAL 60
+
+/* ping interval in seconds for each random sending of a get nodes request. */
+#define GET_NODE_INTERVAL 10
+
+#define MAX_PUNCHING_PORTS 32
+
+/*Interval in seconds between punching attempts*/
+#define PUNCH_INTERVAL 10
+
+/*----------------------------------------------------------------------------------*/
+
+struct Friend {
     uint8_t     client_id[CLIENT_ID_SIZE];
-    IP_Port     ip_port;
+    struct Client_data client_list[MAX_FRIEND_CLIENTS];
+
+    /* time at which the last get_nodes request was sent. */
+    uint64_t    lastgetnode;
+
+    /* Symetric NAT hole punching stuff */
+
+    /* 1 if currently hole punching, otherwise 0 */
+    uint8_t     hole_punching;
+    uint32_t    punching_index;
+    uint64_t    punching_timestamp;
+    uint64_t    recvNATping_timestamp;
+    uint64_t    NATping_id;
+    uint64_t    NATping_timestamp;
+};
+
+struct Node_format {
+    uint8_t     client_id[CLIENT_ID_SIZE];
+    struct IP_Port     ip_port;
+};
+
+struct Pinged {
+    struct IP_Port     ip_port;
+    uint64_t    ping_id;
+    uint64_t    timestamp;
+};
+
+struct Client_data {
+    uint8_t     client_id[CLIENT_ID_SIZE];
+    struct IP_Port     ip_port;
     uint64_t    timestamp;
     uint64_t    last_pinged;
-    
-    /* Returned by this node. Either our friend or us */
-    IP_Port     ret_ip_port;
-    uint64_t    ret_timestamp;
-} Client_data;
 
-Client_data * DHT_get_close_list(void);
+    /* Returned by this node. Either our friend or us */
+    struct IP_Port     ret_ip_port;
+    uint64_t    ret_timestamp;
+};
+
+struct Client_data *DHT_get_close_list(void);
 
 /* Add a new friend to the friends list
     client_id must be CLIENT_ID_SIZE bytes long.
@@ -66,14 +130,14 @@ int DHT_delfriend(uint8_t *client_id);
     returns ip if success
     returns ip of 0 if failure (This means the friend is either offline or we have not found him yet.)
     returns ip of 1 if friend is not in list. */
-IP_Port DHT_getfriendip(uint8_t *client_id);
+struct IP_Port DHT_getfriendip(uint8_t *client_id);
 
 /* Run this function at least a couple times per second (It's the main loop) */
 void doDHT(void);
 
 /* Use this function to bootstrap the client
     Sends a get nodes request to the given node with ip port and public_key */
-void DHT_bootstrap(IP_Port ip_port, uint8_t *public_key);
+void DHT_bootstrap(struct IP_Port ip_port, uint8_t *public_key);
 
 /* ROUTING FUNCTIONS */
 
@@ -91,7 +155,7 @@ int route_tofriend(uint8_t *friend_id, uint8_t *packet, uint32_t length);
     ip_portlist must be at least MAX_FRIEND_CLIENTS big
     returns the number of ips returned
     returns -1 if no such friend*/
-int friend_ips(IP_Port *ip_portlist, uint8_t *friend_id);
+int friend_ips(struct IP_Port *ip_portlist, uint8_t *friend_id);
 
 /* SAVE/LOAD functions */
 
@@ -113,7 +177,7 @@ int DHT_load(uint8_t *data, uint32_t size);
     returns 1 if we are */
 int DHT_isconnected();
 
-void addto_lists(IP_Port ip_port, uint8_t * client_id);
+void addto_lists(struct IP_Port ip_port, uint8_t *client_id);
 
 #ifdef __cplusplus
 }

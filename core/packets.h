@@ -5,33 +5,33 @@
  * Copyright 2013  plutooo
  */
 
-typedef struct {
+struct clientid_t {
     uint8_t id[CLIENT_ID_SIZE];
 
-} __attribute__((packed)) clientid_t;
+} __attribute__((packed));
 
-typedef enum {
+enum packetid_t {
     PACKET_PING_REQ = 0,
     PACKET_PING_RES = 1
 
-} packetid_t;
+};
 
 // Ping packet
-typedef struct {
+struct pingreq_t {
     uint8_t    magic;
-    clientid_t client_id;
+    struct clientid_t client_id;
     uint8_t    nonce[crypto_box_NONCEBYTES];
     uint64_t   ping_id;
     uint8_t    padding[ENCRYPTION_PADDING];
 
-} __attribute__((packed)) pingreq_t;
+} __attribute__((packed));
 
 // Pong packet
-typedef struct {
+struct pingres_t {
     uint8_t    magic;
-    clientid_t client_id;
+    struct clientid_t client_id;
     uint8_t    nonce[crypto_box_NONCEBYTES];
     uint64_t   ping_id;
     uint8_t    padding[ENCRYPTION_PADDING];
 
-} __attribute__((packed)) pingres_t;
+} __attribute__((packed));

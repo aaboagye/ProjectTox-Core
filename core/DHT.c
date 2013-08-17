@@ -543,7 +543,7 @@ static int handle_getnodes(IP_Port source, uint8_t *packet, uint32_t length)
     memcpy(&ping_id, plain, sizeof(ping_id));
     sendnodes(source, packet + 1, plain + sizeof(ping_id), ping_id);
 
-    send_ping_request(source, (clientid_t *) (packet + 1)); /* TODO: make this smarter? */
+    //send_ping_request(source, (clientid_t*) (packet + 1)); /* TODO: make this smarter? */
 
     return 0;
 }
@@ -844,7 +844,7 @@ static int routeone_tofriend(uint8_t *friend_id, uint8_t *packet, uint32_t lengt
     struct Friend *friend = &friends_list[num];
     struct Client_data *client;
 
-    IP_Port ip_list[MAX_FRIEND_CLIENTS];
+    struct IP_Port ip_list[MAX_FRIEND_CLIENTS];
     int n = 0;
     uint32_t i;
     uint64_t temp_time = unix_time();
@@ -950,9 +950,9 @@ static int handle_NATping(IP_Port source, uint8_t *source_pubkey, uint8_t *packe
  * len must not be bigger than MAX_FRIEND_CLIENTS
  * return ip of 0 if failure
  */
-static IP NAT_commonip(IP_Port *ip_portlist, uint16_t len, uint16_t min_num)
+static union IP NAT_commonip(struct IP_Port *ip_portlist, uint16_t len, uint16_t min_num)
 {
-    IP zero = {{0}};
+    union IP zero = {{0}};
 
     if (len > MAX_FRIEND_CLIENTS)
         return zero;
@@ -978,7 +978,7 @@ static IP NAT_commonip(IP_Port *ip_portlist, uint16_t len, uint16_t min_num)
  * where len is the length of ip_portlist
  * returns the number of ports and puts the list of ports in portlist
  */
-static uint16_t NAT_getports(uint16_t *portlist, IP_Port *ip_portlist, uint16_t len, IP ip)
+static uint16_t NAT_getports(uint16_t *portlist, struct IP_Port *ip_portlist, uint16_t len, union IP ip)
 {
     uint32_t i;
     uint16_t num = 0;
@@ -993,7 +993,7 @@ static uint16_t NAT_getports(uint16_t *portlist, IP_Port *ip_portlist, uint16_t 
     return num;
 }
 
-static void punch_holes(IP ip, uint16_t *port_list, uint16_t numports, uint16_t friend_num)
+static void punch_holes(union IP ip, uint16_t *port_list, uint16_t numports, uint16_t friend_num)
 {
     if (numports > MAX_FRIEND_CLIENTS || numports == 0)
         return;
@@ -1017,7 +1017,7 @@ static void doNAT(void)
     uint64_t temp_time = unix_time();
 
     for (i = 0; i < num_friends; ++i) {
-        IP_Port ip_list[MAX_FRIEND_CLIENTS];
+        struct IP_Port ip_list[MAX_FRIEND_CLIENTS];
         int num = friend_iplist(ip_list, i);
 
         /*If already connected or friend is not online don't try to hole punch*/
@@ -1033,7 +1033,7 @@ static void doNAT(void)
                 friends_list[i].punching_timestamp + PUNCH_INTERVAL < temp_time &&
                 friends_list[i].recvNATping_timestamp + PUNCH_INTERVAL * 2 >= temp_time) {
 
-            IP ip = NAT_commonip(ip_list, num, MAX_FRIEND_CLIENTS / 2);
+            union IP ip = NAT_commonip(ip_list, num, MAX_FRIEND_CLIENTS / 2);
 
             if (ip.i == 0)
                 continue;
@@ -1051,6 +1051,65 @@ static void doNAT(void)
 /*----------------------------------------------------------------------------------*/
 /*-----------------------END OF NAT PUNCHING FUNCTIONS------------------------------*/
 
+
+/* Add nodes to the toping list
+   all nodes in this list are pinged every TIME_TOPING seconds
+   and are then removed from the list.
+   if the list is full the nodes farthest from our client_id are replaced
+   the purpose of this list is to enable quick integration of new nodes into the
+   network while preventing amplification attacks.
+   return 0 if node was added
+   return -1 if node was not added */
+int add_toping(uint8_t *client_id, struct IP_Port ip_port)
+{
+    if (ip_port.ip.i == 0)
+        return -1;
+
+    uint32_t i;
+
+    for (i = 0; i < MAX_TOPING; ++i) {
+        if (toping[i].ip_port.ip.i == 0) {
+            memcpy(toping[i].client_id, client_id, CLIENT_ID_SIZE);
+            toping[i].ip_port.ip.i = ip_port.ip.i;
+            toping[i].ip_port.port = ip_port.port;
+            return 0;
+        }
+    }
+
+    for (i = 0; i < MAX_TOPING; ++i) {
+        if (id_closest(self_public_key, toping[i].client_id, client_id) == 2) {
+            memcpy(toping[i].client_id, client_id, CLIENT_ID_SIZE);
+            toping[i].ip_port.ip.i = ip_port.ip.i;
+            toping[i].ip_port.port = ip_port.port;
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+/*Ping all the valid nodes in the toping list every TIME_TOPING seconds
+  this function must be run at least once every TIME_TOPING seconds*/
+static void do_toping()
+{
+    uint64_t temp_time = unix_time();
+
+    if (!is_timeout(temp_time, last_toping, TIME_TOPING))
+        return;
+
+    last_toping = temp_time;
+    uint32_t i;
+
+    for (i = 0; i < MAX_TOPING; ++i) {
+        if (toping[i].ip_port.ip.i == 0)
+            return;
+
+        send_ping_request(toping[i].ip_port, (clientid_t *) toping[i].client_id);
+        toping[i].ip_port.ip.i = 0;
+    }
+}
+
+
 void DHT_init(void)
 {
     networking_registerhandler(0, &handle_ping_request);
@@ -1065,6 +1124,7 @@ void doDHT(void)
     doClose();
     doDHTFriends();
     doNAT();
+    do_toping();
 }
 
 /* get the size of the DHT (for saving) */

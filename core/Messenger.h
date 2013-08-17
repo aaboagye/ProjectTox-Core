@@ -129,8 +129,6 @@ struct Messenger {
     void *friend_statuschange_userdata;
     void (*friend_connectionstatuschange)(struct Messenger *m, int, uint8_t, void *);
     void *friend_connectionstatuschange_userdata;
-
-
 };
 
 /*
